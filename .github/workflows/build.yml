@@ -1,0 +1,75 @@
+name: NASM CI/CD
+
+on:
+  push:
+    branches: [ "*" ]
+
+jobs:
+  generate-golden:
+    name: Generate golden files for testing
+    runs-on: ubuntu-latest
+
+    container:
+      image: ubuntu:latest
+
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 1
+
+      - name: Install dependencies
+        run: |
+          apt-get update && apt-get install -y automake perl build-essential
+
+      - name: Prepare build system
+        run: |
+          sh autogen.sh
+          sh configure
+
+      - name: Build
+        run: |
+          make golden
+
+      - name: Upload golden test files
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden
+          path: test/golden/
+
+  build:
+    name: Build and test
+    needs: generate-golden
+    runs-on: ubuntu-latest
+
+    container:
+      image: ubuntu:latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download golden test files
+        uses: actions/download-artifact@v4
+        with:
+          name: golden
+          path: test/golden/
+
+      - name: Install dependencies
+        run: |
+          apt-get update && apt-get install -y automake perl build-essential
+
+      - name: Prepare build system
+        run: |
+          sh autogen.sh
+          sh configure
+
+      - name: Build
+        run: |
+          make
+          ./nasm --version
+
+      - name: Run tests
+        run: |
+          make test
